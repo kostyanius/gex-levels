@@ -12,7 +12,7 @@ Line format: KEY1,KEY2|@=<underlying spot>=<UTC ms the spot refers to, 0 = live>
 The levels are in the underlying's prices (GLD, DIA, QQQ, SPX, ETH...); the Pine script multiplies
 them by (chart close at that moment / spot), exactly like the ATAS version does.
 
-Optional: New Relic custom event "GexRun" per run (env NR_ACCOUNT_ID + NR_INSERT_KEY, NR_REGION=US|EU).
+Optional: New Relic custom events (env NR_LICENSE_KEY, NR_REGION=US|EU): "GexRun" per instrument, "GexJob" per run.
 """
 import datetime as dt
 import html
@@ -313,15 +313,16 @@ def line_for(keys, s):
 
 
 def send_new_relic(events):
-    acc, key = os.environ.get("NR_ACCOUNT_ID", "").strip(), os.environ.get("NR_INSERT_KEY", "").strip()
-    if not acc or not key:
+    """New Relic Event API with a License (Ingest) key; never breaks the job."""
+    key = os.environ.get("NR_LICENSE_KEY", "").strip()
+    if not key:
         return
-    host = "insights-collector.eu01.nr-data.net" if os.environ.get("NR_REGION", "US").upper() == "EU" else "insights-collector.newrelic.com"
-    req = urllib.request.Request(f"https://{host}/v1/accounts/{acc}/events", data=json.dumps(events).encode(),
-                                 headers={"Content-Type": "application/json", "X-Insert-Key": key}, method="POST")
+    host = "insights-collector.eu01.nr-data.net" if os.environ.get("NR_REGION", "US").strip().upper() == "EU" else "insights-collector.newrelic.com"
+    req = urllib.request.Request(f"https://{host}/v1/accounts/events", data=json.dumps(events).encode(),
+                                 headers={"Content-Type": "application/json", "Api-Key": key}, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
-            print("New Relic:", r.status)
+            print("New Relic:", r.status, r.read().decode(errors="replace")[:200])
     except Exception as e:  # monitoring must never break the job
         print("New Relic error:", e)
 
@@ -378,11 +379,19 @@ def main():
             lines.append(line_for(keys, s))
         print(f"{src}:{und:4} spot={s['spot']:.2f} levels={len(s['levels'])} {s['error'] or 'ok'}")
         inst.append({"keys": keys, "source": s["source"], "spot": s["spot"], "levels": len(s["levels"]), "error": s["error"]})
-        events.append({"eventType": "GexRun", "instrument": und, "source": src, "ok": ok, "error": s["error"],
+        events.append({"eventType": "GexRun", "instrument": und, "source": src, "ok": 1 if ok else 0,
+                       "status": "ok" if ok else "error", "error": s["error"][:250],
                        "levels": len(s["levels"]), "spot": s["spot"], "durationSec": round(time.time() - t1, 2)})
     status = {"updated_utc": dt.datetime.now(UTC).strftime("%Y-%m-%d %H:%M"), "duration_sec": round(time.time() - t0, 1),
               "instruments": inst}
     write_site(lines, status)
+    run = os.environ.get("GITHUB_RUN_ID", "")
+    events.append({"eventType": "GexJob", "ok": 1 if lines else 0, "instrumentsOk": len(lines),
+                   "instrumentsTotal": len(INSTRUMENTS), "durationSec": status["duration_sec"],
+                   "trigger": os.environ.get("GITHUB_EVENT_NAME", "local"), "runId": run,
+                   "runUrl": f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{run}" if run else ""})
+    for e in events:
+        e["job"] = "gex-levels"
     send_new_relic(events)
     # the job fails only when nothing at all could be calculated
     return 0 if lines else 1

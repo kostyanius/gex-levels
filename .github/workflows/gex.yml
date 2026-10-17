@@ -31,9 +31,8 @@ jobs:
       - name: Calculate GEX levels
         run: python gex.py
         env:
-          # optional: one "GexRun" event per instrument to New Relic (Settings -> Secrets and variables -> Actions)
-          NR_ACCOUNT_ID: ${{ secrets.NR_ACCOUNT_ID }}
-          NR_INSERT_KEY: ${{ secrets.NR_INSERT_KEY }}
+          # optional New Relic events "GexRun" / "GexJob" (Settings -> Secrets and variables -> Actions)
+          NR_LICENSE_KEY: ${{ secrets.NR_LICENSE_KEY }}
           NR_REGION: ${{ vars.NR_REGION }}
 
       - uses: actions/configure-pages@v5

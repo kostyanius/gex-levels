@@ -16,5 +16,6 @@ Instruments: edit `INSTRUMENTS` in `gex.py`.
 
 Setup (once): Settings -> Pages -> Source: GitHub Actions; Actions -> gex-levels -> Run workflow.
 
-New Relic (optional): secrets `NR_ACCOUNT_ID`, `NR_INSERT_KEY` (License / Ingest key), variable `NR_REGION` = `EU` or `US`.
-Each run sends one `GexRun` event per instrument (ok, error, levels, spot, durationSec).
+New Relic (optional): secret `NR_LICENSE_KEY` (Ingest - License key), variable `NR_REGION` = `EU` or `US`.
+Each run sends one `GexRun` event per instrument (ok, status, error, levels, spot, durationSec) and one `GexJob`
+event (ok, instrumentsOk, instrumentsTotal, durationSec, trigger, runUrl). Dashboard: `newrelic/dashboard.json`.
