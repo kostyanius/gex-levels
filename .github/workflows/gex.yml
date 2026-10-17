@@ -2,7 +2,9 @@ name: gex-levels
 
 on:
   schedule:
-    - cron: "*/5 * * * *"      # GitHub's minimum; scheduled runs are often a few minutes late
+    # main trigger: cron-job.org -> workflow_dispatch every 5 minutes (GitHub's own schedule is best-effort);
+    # this hourly run is only a backup in case the external trigger stops
+    - cron: "17 * * * *"
   workflow_dispatch: {}        # "Run workflow" button for a manual update
 
 permissions:
