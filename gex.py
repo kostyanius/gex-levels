@@ -21,6 +21,7 @@ import math
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 from zoneinfo import ZoneInfo
 
@@ -318,13 +319,17 @@ def send_new_relic(events):
     if not key:
         print("New Relic: skipped, secret NR_LICENSE_KEY is not set")
         return
-    print(f"New Relic: sending {len(events)} events, region {os.environ.get('NR_REGION', '') or 'US (default)'}, key ...{key[-4:]}")
-    host = "insights-collector.eu01.nr-data.net" if os.environ.get("NR_REGION", "US").strip().upper() == "EU" else "insights-collector.newrelic.com"
+    # EU-region license keys start with "eu01"; NR_REGION (EU / US) overrides the guess
+    region = os.environ.get("NR_REGION", "").strip().upper() or ("EU" if key.lower().startswith("eu") else "US")
+    host = "insights-collector.eu01.nr-data.net" if region == "EU" else "insights-collector.newrelic.com"
+    print(f"New Relic: sending {len(events)} events to {region} ({host}), key {key[:4]}...{key[-4:]}")
     req = urllib.request.Request(f"https://{host}/v1/accounts/events", data=json.dumps(events).encode(),
                                  headers={"Content-Type": "application/json", "Api-Key": key}, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             print("New Relic:", r.status, r.read().decode(errors="replace")[:200])
+    except urllib.error.HTTPError as e:
+        print("New Relic error:", e.code, e.read().decode(errors="replace")[:300])
     except Exception as e:  # monitoring must never break the job
         print("New Relic error:", e)
 
