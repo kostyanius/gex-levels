@@ -316,7 +316,9 @@ def send_new_relic(events):
     """New Relic Event API with a License (Ingest) key; never breaks the job."""
     key = os.environ.get("NR_LICENSE_KEY", "").strip()
     if not key:
+        print("New Relic: skipped, secret NR_LICENSE_KEY is not set")
         return
+    print(f"New Relic: sending {len(events)} events, region {os.environ.get('NR_REGION', '') or 'US (default)'}, key ...{key[-4:]}")
     host = "insights-collector.eu01.nr-data.net" if os.environ.get("NR_REGION", "US").strip().upper() == "EU" else "insights-collector.newrelic.com"
     req = urllib.request.Request(f"https://{host}/v1/accounts/events", data=json.dumps(events).encode(),
                                  headers={"Content-Type": "application/json", "Api-Key": key}, method="POST")
