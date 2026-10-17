@@ -37,6 +37,7 @@ INSTRUMENTS = [
     ("BTC", "DERIBIT", "BTC", 45, 0.12, False),
 ]
 SHOW_NEAR, SHOW_RANGE, BOX_FILTER, GEX_SIGN, TOP_N = True, True, True, True, 2
+TV_BARS = 15   # profile strikes in the line ("#GEX n +=price=length"), same as InpTvBars in GexLevelsEA
 
 
 def get_json(url):
@@ -92,7 +93,7 @@ class Row:
 
 
 def load(src, und, days, band, today):
-    s = {"source": f"{src}:{und}", "spot": 0.0, "live": False, "ext": False, "levels": [], "error": "",
+    s = {"source": f"{src}:{und}", "spot": 0.0, "live": False, "ext": False, "levels": [], "profile": [], "error": "",
          "net": 0.0, "win_oi": 0.0, "move": 0.0, "anchor_ms": 0}
     rows = []
     yr, base_close, mult, iv30 = 252.0, 0.0, 100.0, 0.0
@@ -283,15 +284,31 @@ def compute(s, rows, days, band, today, mult, yr, base_close, iv30):
             continue
         lv(f"GEX {rank}" + ((" +" if v > 0 else " -") if GEX_SIGN else ""), k)
         n += 1
+    # profile: (strike, net gamma, rank), sorted by strike
+    rank_of = {k: i for i, (k, _) in enumerate(ranked, start=1)}
+    s["profile"] = sorted((k, v, rank_of[k]) for k, v in pf.items())
 
 
 def fmt(x):
-    return f"{x:.4f}".rstrip("0").rstrip(".")
+    return f"{x:.2f}".rstrip("0").rstrip(".")
 
 
 def line_for(keys, s):
+    """Same string as GexLevelsEA writes (levels merged by price, then the profile bars),
+    except the prices stay in the underlying's scale and "@=spot=time" tells the Pine side how to scale them."""
     parts = [keys, f"@={fmt(s['spot'])}={0 if s['live'] else s['anchor_ms']}"]
-    parts += [f"{n}={fmt(px)}=0" for n, px in s["levels"]]
+    merged = []                                    # levels sorted by price; same price -> one merged name
+    for n, px in sorted(s["levels"], key=lambda x: x[1]):
+        if merged and abs(merged[-1][1] - px) < 1e-9:
+            merged[-1][0] += " / " + n
+        else:
+            merged.append([n, px])
+    parts += [f"{n}={fmt(px)}=0" for n, px in merged]
+    pmx = max((abs(v) for _, v, _ in s.get("profile", [])), default=0)
+    if pmx > 0:
+        for k, v, r in s["profile"]:
+            if r <= TV_BARS:
+                parts.append(f"#GEX {r} {'+' if v >= 0 else '-'}={fmt(k)}={max(round(100 * math.sqrt(abs(v) / pmx)), 3)}")
     return "|".join(parts)
 
 
