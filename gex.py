@@ -38,6 +38,7 @@ INSTRUMENTS = [
     ("BTC", "DERIBIT", "BTC", 45, 0.12, False),
 ]
 SHOW_NEAR, SHOW_RANGE, BOX_FILTER, GEX_SIGN, TOP_N = True, True, True, True, 2
+SHOW_VOL = True   # volatility context: 1W Min / Max (weekly expected move) + 25-delta call / put strikes with skew
 TV_BARS = 15   # profile strikes in the line ("#GEX n +=price=length"), same as InpTvBars in GexLevelsEA
 
 
@@ -65,6 +66,43 @@ def bs_gamma(S, K, T, iv):
     v = iv * math.sqrt(T)
     d1 = (math.log(S / K) + 0.5 * iv * iv * T) / v
     return math.exp(-0.5 * d1 * d1) / (math.sqrt(2 * math.pi) * S * v)
+
+
+def bs_delta(S, K, T, iv, cp):
+    """Black-Scholes delta (no rates): call N(d1), put N(d1) - 1"""
+    if iv <= 0 or T <= 0 or S <= 0 or K <= 0:
+        return 0.0
+    d1 = (math.log(S / K) + 0.5 * iv * iv * T) / (iv * math.sqrt(T))
+    n = 0.5 * (1.0 + math.erf(d1 / math.sqrt(2.0)))
+    return n if cp > 0 else n - 1.0
+
+
+def vol_ctx(rows, spot, iv30):
+    """Volatility context, the same in all four versions (Python / MT5 / Quantower / ATAS):
+    ivF  = at-the-money IV of the front expiry (>= 1 day): mean of the call and put IV at the strike nearest spot
+    ivM  = 30-day IV: the source's iv30 if it has one, else the ATM IV of the expiry nearest 30 days
+    term = ivF / ivM  (> 1 = inverted term structure = stress)
+    25-delta call / put of the expiry nearest 30 days (>= 7 days): strike + IV, skew = IV put - IV call (vol points)"""
+    rs = [r for r in rows if r.IV > 0 and r.D >= 1.0]
+    if not rs:
+        return None
+
+    def atm(exp_rows):
+        k = min(exp_rows, key=lambda r: abs(r.K - spot)).K
+        ivs = [r.IV for r in exp_rows if r.K == k]
+        return sum(ivs) / len(ivs)
+
+    front = min(r.Ex for r in rs)
+    ivF = atm([r for r in rs if r.Ex == front])
+    m30 = [r for r in rs if r.D >= 7.0] or rs
+    e30 = min({r.Ex: r.D for r in m30}.items(), key=lambda x: abs(x[1] - 30.0))[0]
+    r30 = [r for r in m30 if r.Ex == e30]
+    ivM = iv30 if iv30 > 0 else atm(r30)
+    c = min((r for r in r30 if r.CP > 0), key=lambda r: abs(bs_delta(spot, r.K, r.D / 365.0, r.IV, 1) - 0.25), default=None)
+    p = min((r for r in r30 if r.CP < 0), key=lambda r: abs(bs_delta(spot, r.K, r.D / 365.0, r.IV, -1) + 0.25), default=None)
+    return {"ivF": ivF, "ivM": ivM, "term": ivF / ivM if ivM > 0 else 0.0,
+            "kc": c.K if c else 0.0, "ivc": c.IV if c else 0.0,
+            "kp": p.K if p else 0.0, "ivp": p.IV if p else 0.0}
 
 
 def anchor_utc(ext):
@@ -270,6 +308,17 @@ def compute(s, rows, days, band, today, mult, yr, base_close, iv30):
             s["move"] = m
             lv("1D Max", b * (1 + m))
             lv("1D Min", b * (1 - m))
+    if SHOW_VOL:
+        v = vol_ctx(rows, spot, iv30)
+        if v and v["ivM"] > 0:
+            b = base_close if base_close > 0 else spot
+            w = v["ivM"] * math.sqrt(5.0 / yr)
+            s["vol"] = v
+            lv(f"1W Max (IV {100 * v['ivM']:.1f}% term {v['term']:.2f})", b * (1 + w))
+            lv("1W Min", b * (1 - w))
+            if v["kc"] > 0 and v["kp"] > 0:
+                lv(f"25D Call (IV {100 * v['ivc']:.1f}%)", v["kc"])
+                lv(f"25D Put (IV {100 * v['ivp']:.1f}% skew {100 * (v['ivp'] - v['ivc']):+.1f})", v["kp"])
     # GEX ranks: 1 = largest |net gamma| in the profile
     ranked = sorted(pf.items(), key=lambda x: -abs(x[1]))
     used = {up[0][0], dn[0][0]}
