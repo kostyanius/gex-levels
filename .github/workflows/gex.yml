@@ -14,9 +14,11 @@ on:
 permissions:
   contents: write              # to publish to the "data" branch
 
+# New group name on purpose: runs of the old workflow that hang in "waiting" (stuck Pages deployments) hold the old
+# group "gex-levels" and would block every new run. A newer run replaces one that is still going.
 concurrency:
-  group: gex-levels
-  cancel-in-progress: false
+  group: gex-levels-data
+  cancel-in-progress: true
 
 jobs:
   calc:
