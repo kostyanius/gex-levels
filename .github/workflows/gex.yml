@@ -1,16 +1,18 @@
 name: gex-levels
 
+# Open interest is published once a day, so the levels barely move intraday and the Pine script rescales them
+# to the chart price itself. A few runs a day are enough; the old 5-minute run created ~290 GitHub Pages
+# deployments a day, which is what got the repository blocked.
 on:
   schedule:
-    # main trigger: cron-job.org -> workflow_dispatch every 5 minutes (GitHub's own schedule is best-effort);
-    # this hourly run is only a backup in case the external trigger stops
-    - cron: "17 * * * *"
-  workflow_dispatch: {}        # "Run workflow" button for a manual update
+    - cron: "40 6 * * 1-5"     # before the European open (CBOE open interest is already updated)
+    - cron: "15 13 * * 1-5"    # before the US open (pre-market prices of the ETFs)
+    - cron: "45 15 * * 1-5"    # after the US open
+    - cron: "10 10 * * 0,6"    # weekends: only ETH / BTC move
+  workflow_dispatch: {}        # "Run workflow" button for an update on demand
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write              # to publish to the "data" branch
 
 concurrency:
   group: gex-levels
@@ -20,9 +22,6 @@ jobs:
   calc:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,11 +36,25 @@ jobs:
           NR_LICENSE_KEY: ${{ secrets.NR_LICENSE_KEY }}
           NR_REGION: ${{ vars.NR_REGION }}
 
-      - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - id: deploy
-        uses: actions/deploy-pages@v4
+      # The result lives on the "data" branch as a single commit that is replaced on every update,
+      # so the repository history and the number of deployments do not grow. No GitHub Pages involved.
+      - name: Publish to the data branch (only when the levels changed)
+        env:
+          REPO: ${{ github.repository }}
+          TOKEN: ${{ github.token }}
+        run: |
+          norm() { sed -E 's/\|@=[^|]*//' "$1"; }      # ignore spot / time, they only rescale the same levels
+          curl -sf "https://raw.githubusercontent.com/$REPO/data/levels.txt" -o /tmp/prev.txt || : > /tmp/prev.txt
+          if [ "$(norm /tmp/prev.txt)" = "$(norm site/levels.txt)" ]; then
+            echo "levels unchanged - nothing to publish"
+            exit 0
+          fi
+          rm -f site/index.html                          # not needed here: the file is read as plain text
+          cd site
+          git init -q -b data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add levels.txt status.json
+          git commit -q -m "GEX levels $(date -u +%Y-%m-%d\ %H:%M) UTC"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" data
+          echo "published: https://raw.githubusercontent.com/$REPO/data/levels.txt"
