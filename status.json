@@ -1,0 +1,48 @@
+{
+ "updated_utc": "2026-11-14 19:00",
+ "duration_sec": 3.4,
+ "instruments": [
+  {
+   "keys": "US30,DJ30,DJI,WS30,YM1,MYM",
+   "source": "CBOE:DIA",
+   "spot": 523.15,
+   "levels": 16,
+   "error": ""
+  },
+  {
+   "keys": "US100,NAS100,USTEC,NDX,NQ1,MNQ",
+   "source": "CBOE:QQQ",
+   "spot": 674.25,
+   "levels": 16,
+   "error": ""
+  },
+  {
+   "keys": "US500,SPX500,SP500,SPX,ES1,MES",
+   "source": "CBOE:SPX",
+   "spot": 7561.6699,
+   "levels": 16,
+   "error": ""
+  },
+  {
+   "keys": "XAUUSD,GOLD,GC1,MGC",
+   "source": "CBOE:GLD",
+   "spot": 355.45,
+   "levels": 17,
+   "error": ""
+  },
+  {
+   "keys": "ETH",
+   "source": "DERIBIT:ETH",
+   "spot": 1834.64,
+   "levels": 16,
+   "error": ""
+  },
+  {
+   "keys": "BTC",
+   "source": "DERIBIT:BTC",
+   "spot": 65653.89,
+   "levels": 17,
+   "error": ""
+  }
+ ]
+}
