@@ -22,6 +22,7 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from zoneinfo import ZoneInfo
 
@@ -30,10 +31,10 @@ UTC = dt.timezone.utc
 
 # keys (matched against the TradingView ticker, comma separated), source, underlying, days window, band, include today's expiry
 INSTRUMENTS = [
-    ("US30,DJ30,DJI,WS30,YM1,MYM", "CBOE", "DIA", 45, 0.06, False),
-    ("US100,NAS100,USTEC,NDX,NQ1,MNQ", "CBOE", "QQQ", 45, 0.06, False),
-    ("US500,SPX500,SP500,SPX,ES1,MES", "CBOE", "SPX", 45, 0.06, False),
-    ("XAUUSD,GOLD,GC1,MGC", "CBOE", "GLD", 45, 0.06, False),
+    ("US30,DJ30,DJI,WS30,YM1,MYM", "ALPACA", "DIA", 45, 0.06, False),
+    ("US100,NAS100,USTEC,NDX,NQ1,MNQ", "ALPACA", "QQQ", 45, 0.06, False),
+    ("US500,SPX500,SP500,SPX,ES1,MES", "ALPACA", "SPY", 45, 0.06, False),
+    ("XAUUSD,GOLD,GC1,MGC", "ALPACA", "GLD", 45, 0.06, False),
     ("ETH", "DERIBIT", "ETH", 45, 0.12, False),
     ("BTC", "DERIBIT", "BTC", 45, 0.12, False),
 ]
@@ -131,6 +132,106 @@ class Row:
         self.K, self.OI, self.G, self.IV, self.D, self.CP, self.Ex, self.M = K, OI, G, IV, D, CP, Ex, M
 
 
+ALPACA_DATA = "https://data.alpaca.markets"
+ALPACA_TRADING = [os.environ.get("ALPACA_TRADING_URL", "").rstrip("/") or "https://paper-api.alpaca.markets",
+                  "https://api.alpaca.markets"]
+
+
+def alpaca_get(url, key, secret):
+    req = urllib.request.Request(url, headers={"APCA-API-KEY-ID": key, "APCA-API-SECRET-KEY": secret,
+                                               "accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
+
+
+def load_alpaca(und, days, band, s):
+    """ETF option chain from Alpaca (free Basic plan): open interest from the contracts endpoint,
+    gamma / implied volatility from the indicative snapshots, underlying price from the IEX snapshot."""
+    key, secret = os.environ.get("ALPACA_KEY_ID", "").strip(), os.environ.get("ALPACA_SECRET", "").strip()
+    if not key or not secret:
+        s["error"] = "ALPACA_KEY_ID / ALPACA_SECRET are not set"
+        return [], 0.0
+    snap = alpaca_get(f"{ALPACA_DATA}/v2/stocks/{und}/snapshot?feed=iex", key, secret)
+    lt = snap.get("latestTrade") or {}
+    spot = float(lt.get("p") or 0)
+    prev = float((snap.get("prevDailyBar") or {}).get("c") or 0)
+    if spot <= 0:
+        s["error"] = "Alpaca: no underlying price"
+        return [], 0.0
+    try:
+        t = dt.datetime.fromisoformat(str(lt.get("t")).replace("Z", "+00:00"))
+        s["anchor_ms"] = int(t.timestamp() * 1000)
+    except Exception:
+        s["anchor_ms"] = int(dt.datetime.now(UTC).timestamp() * 1000)
+    s["spot"], s["ext"] = spot, True
+    lo, hi = spot * (1 - band - 0.02), spot * (1 + band + 0.02)
+    last = (dt.date.today() + dt.timedelta(days=days + 1)).isoformat()
+    first = dt.date.today().isoformat()
+    flt = f"expiration_date_gte={first}&expiration_date_lte={last}&strike_price_gte={lo:.2f}&strike_price_lte={hi:.2f}"
+
+    # open interest
+    oi, errs, sample = {}, [], None
+    for base in ALPACA_TRADING:
+        try:
+            token, pages = "", 0
+            while pages < 40:
+                u = f"{base}/v2/options/contracts?underlying_symbols={und}&limit=10000&{flt}" + (
+                    "&page_token=" + urllib.parse.quote(token) if token else "")
+                d = alpaca_get(u, key, secret)
+                for c in d.get("option_contracts") or []:
+                    sample = sample or c
+                    oi[c.get("symbol", "")] = num(c, "open_interest")
+                token, pages = d.get("next_page_token") or "", pages + 1
+                if not token:
+                    break
+            break
+        except urllib.error.HTTPError as e:
+            errs.append(f"{base}: HTTP {e.code}")
+            if e.code not in (401, 403):
+                raise
+    if not oi:
+        s["error"] = "Alpaca contracts: no data (" + "; ".join(errs) + ")" + (
+            f" fields: {sorted(sample)}" if sample else "")
+        return [], prev
+
+    # gamma / IV
+    snaps, token, pages, ssample = {}, "", 0, None
+    while pages < 80:
+        u = (f"{ALPACA_DATA}/v1beta1/options/snapshots/{und}?feed=indicative&limit=1000&{flt}" +
+             ("&page_token=" + urllib.parse.quote(token) if token else ""))
+        d = alpaca_get(u, key, secret)
+        for sym, v in (d.get("snapshots") or {}).items():
+            ssample = ssample or (sym, v)
+            snaps[sym] = v
+        token, pages = d.get("next_page_token") or "", pages + 1
+        if not token:
+            break
+
+    now = dt.datetime.now(ET).replace(tzinfo=None)
+    rows = []
+    for sym, o in oi.items():
+        v = snaps.get(sym)
+        if o <= 0 or v is None or len(sym) < 16:
+            continue
+        tail = sym[len(sym) - 15:]
+        try:
+            k = float(tail[7:15]) / 1000.0
+            ex = dt.datetime.strptime(tail[:6], "%y%m%d")
+        except ValueError:
+            continue
+        dd = (ex + dt.timedelta(hours=16) - now).total_seconds() / 86400.0
+        if k <= 0 or dd <= 0:
+            continue
+        g = num(v.get("greeks") or {}, "gamma")
+        iv = num(v, "impliedVolatility")
+        rows.append(Row(k, o, g, iv, max(dd, 0.02), 1 if tail[6] == "C" else -1, ex))
+    if not rows:
+        s["error"] = (f"Alpaca: {len(oi)} contracts with OI, {len(snaps)} snapshots, 0 joined; "
+                      f"contract fields {sorted(sample) if sample else '-'}; snapshot {ssample[0] if ssample else '-'} "
+                      f"fields {sorted(ssample[1]) if ssample else '-'}")
+    return rows, prev
+
+
 def load(src, und, days, band, today):
     s = {"source": f"{src}:{und}", "spot": 0.0, "live": False, "ext": False, "levels": [], "profile": [], "error": "",
          "net": 0.0, "win_oi": 0.0, "move": 0.0, "anchor_ms": 0}
@@ -169,6 +270,10 @@ def load(src, und, days, band, today):
             p_row = Row(k, oi, num(op, "gamma"), num(op, "iv"), max(dd, 0.02), cp, ex, mt)
             rows.append(p_row)
         s["anchor_ms"] = int(anchor_utc(s["ext"]).timestamp() * 1000)
+    elif src == "ALPACA":
+        rows, base_close = load_alpaca(und, days, band, s)
+        if s["error"]:
+            return s
     elif src == "DERIBIT":
         res = get_json(f"https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency={und}&kind=option")["result"]
         months = "JANFEBMARAPRMAYJUNJULAUGSEPOCTNOVDEC"
