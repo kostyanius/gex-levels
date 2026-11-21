@@ -235,6 +235,34 @@ def load_alpaca(und, days, band, s):
         if r.G <= 0 and r.IV <= 0 and by_ex.get(r.Ex):
             r.IV = min(by_ex[r.Ex], key=lambda x: abs(x.K - r.K)).IV
             filled += 1
+    # option flow of the day (volume, premium, delta-weighted volume) from the same snapshots; direction of the trades is unknown,
+    # so this is only a sentiment estimate: more put volume / negative delta flow = more defensive positioning
+    fl = {"call_vol": 0.0, "put_vol": 0.0, "call_prem": 0.0, "put_prem": 0.0, "delta_flow": 0.0,
+          "call_vol_7d": 0.0, "put_vol_7d": 0.0, "delta_flow_7d": 0.0, "contracts": 0}
+    for sym, v in snaps.items():
+        if len(sym) < 16:
+            continue
+        tail = sym[len(sym) - 15:]
+        try:
+            ex = dt.datetime.strptime(tail[:6], "%y%m%d")
+        except ValueError:
+            continue
+        db = v.get("dailyBar") or {}
+        vol = num(db, "v")
+        if vol <= 0:
+            continue
+        px = num(db, "vw") or num(db, "c")
+        delta = num(v.get("greeks") or {}, "delta")
+        cp = 1 if tail[6] == "C" else -1
+        near = (ex + dt.timedelta(hours=16) - now).total_seconds() / 86400.0 <= 7
+        fl["contracts"] += 1
+        fl["call_vol" if cp > 0 else "put_vol"] += vol
+        fl["call_prem" if cp > 0 else "put_prem"] += vol * px * 100
+        fl["delta_flow"] += vol * delta * 100
+        if near:
+            fl["call_vol_7d" if cp > 0 else "put_vol_7d"] += vol
+            fl["delta_flow_7d"] += vol * delta * 100
+    s["flow"] = {k: round(x) for k, x in fl.items()}
     cs = [r for r in rows if r.CP > 0]
     ps = [r for r in rows if r.CP < 0]
     s["diag"] = {"contracts_oi": len(oi), "snapshots": len(snaps), "rows": len(rows),
@@ -516,6 +544,42 @@ def send_new_relic(events):
         print("New Relic error:", e)
 
 
+FLOW_COLS = ["call_vol", "put_vol", "call_prem", "put_prem", "delta_flow", "call_vol_7d", "put_vol_7d", "delta_flow_7d", "contracts"]
+
+
+def write_flow_log(inst, prev_path, out="site", keep=20000):
+    """Append one row per instrument to flow_log.csv (previous file is fetched from the data branch).
+    A row identical to the previous one of the same instrument (weekend, closed market) is not added."""
+    rows = []
+    try:
+        with open(prev_path) as f:
+            rows = [x.rstrip("\n") for x in f if x.strip()]
+    except OSError:
+        pass
+    head = "utc,instrument," + "spot," + ",".join(FLOW_COLS)
+    if not rows or not rows[0].startswith("utc,"):
+        rows = [head] + [x for x in rows if not x.startswith("utc,")]
+    last = {}
+    for x in rows[1:]:
+        c = x.split(",")
+        if len(c) > 2:
+            last[c[1]] = ",".join(c[2:])
+    now = dt.datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
+    for i in inst:
+        f = i.get("flow") or {}
+        if not f or not i["spot"]:
+            continue
+        name = i["source"].split(":")[-1]
+        tail = ",".join([f"{i['spot']:.2f}"] + [str(f[c]) for c in FLOW_COLS])
+        if last.get(name) == tail:
+            continue
+        rows.append(f"{now},{name},{tail}")
+    rows = rows[:1] + rows[1:][-keep:]
+    os.makedirs(out, exist_ok=True)
+    with open(os.path.join(out, "flow_log.csv"), "w") as f:
+        f.write("\n".join(rows) + "\n")
+
+
 def write_site(lines, status, out="site"):
     os.makedirs(out, exist_ok=True)
     txt = "\n".join(lines)
@@ -585,13 +649,20 @@ def main():
             stale = True
         print(f"{src}:{und:4} spot={s['spot']:.2f} levels={len(s['levels'])} {s['error'] or 'ok'}")
         inst.append({"keys": keys, "source": s["source"], "spot": s["spot"], "levels": len(s["levels"]), "error": s["error"],
-                     "stale": stale, "diag": s.get("diag", {})})
+                     "stale": stale, "diag": s.get("diag", {}), "flow": s.get("flow", {})})
+        if s.get("flow"):
+            f = s["flow"]
+            events.append({"eventType": "GexFlow", "instrument": und, "spot": s["spot"], "pcVol": round(f["put_vol"] / max(f["call_vol"], 1), 3),
+                           "callVol": f["call_vol"], "putVol": f["put_vol"], "callPrem": f["call_prem"], "putPrem": f["put_prem"],
+                           "deltaFlow": f["delta_flow"], "callVol7d": f["call_vol_7d"], "putVol7d": f["put_vol_7d"],
+                           "deltaFlow7d": f["delta_flow_7d"], "contracts": f["contracts"]})
         events.append({"eventType": "GexRun", "instrument": und, "source": src, "ok": 1 if ok else 0,
                        "status": "ok" if ok else "error", "error": s["error"][:250],
                        "levels": len(s["levels"]), "spot": s["spot"], "durationSec": round(time.time() - t1, 2)})
     status = {"updated_utc": dt.datetime.now(UTC).strftime("%Y-%m-%d %H:%M"), "duration_sec": round(time.time() - t0, 1),
               "instruments": inst}
     write_site(lines, status)
+    write_flow_log(inst, os.environ.get("PREV_FLOW", ""))
     run = os.environ.get("GITHUB_RUN_ID", "")
     events.append({"eventType": "GexJob", "ok": 1 if lines else 0, "instrumentsOk": sum(1 for i in inst if not i["error"]),
                    "instrumentsTotal": len(INSTRUMENTS), "durationSec": status["duration_sec"],
