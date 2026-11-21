@@ -225,12 +225,22 @@ def load_alpaca(und, days, band, s):
         g = num(v.get("greeks") or {}, "gamma")
         iv = num(v, "impliedVolatility")
         rows.append(Row(k, o, g, iv, max(dd, 0.02), 1 if tail[6] == "C" else -1, ex))
+    # contracts without greeks / IV (illiquid wings): take the IV of the nearest strike of the same expiry
+    by_ex = {}
+    for r in rows:
+        if r.IV > 0:
+            by_ex.setdefault(r.Ex, []).append(r)
+    filled = 0
+    for r in rows:
+        if r.G <= 0 and r.IV <= 0 and by_ex.get(r.Ex):
+            r.IV = min(by_ex[r.Ex], key=lambda x: abs(x.K - r.K)).IV
+            filled += 1
     cs = [r for r in rows if r.CP > 0]
     ps = [r for r in rows if r.CP < 0]
     s["diag"] = {"contracts_oi": len(oi), "snapshots": len(snaps), "rows": len(rows),
                  "call_rows": len(cs), "put_rows": len(ps),
                  "call_oi": round(sum(r.OI for r in cs)), "put_oi": round(sum(r.OI for r in ps)),
-                 "call_gamma0": sum(1 for r in cs if r.G <= 0), "put_gamma0": sum(1 for r in ps if r.G <= 0),
+                 "iv_filled": filled, "call_gamma0": sum(1 for r in cs if r.G <= 0), "put_gamma0": sum(1 for r in ps if r.G <= 0),
                  "snap_sample": (list(ssample[1].keys()) if ssample else [])}
     if not rows:
         s["error"] = (f"Alpaca: {len(oi)} contracts with OI, {len(snaps)} snapshots, 0 joined; "
