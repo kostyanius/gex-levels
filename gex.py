@@ -225,6 +225,13 @@ def load_alpaca(und, days, band, s):
         g = num(v.get("greeks") or {}, "gamma")
         iv = num(v, "impliedVolatility")
         rows.append(Row(k, o, g, iv, max(dd, 0.02), 1 if tail[6] == "C" else -1, ex))
+    cs = [r for r in rows if r.CP > 0]
+    ps = [r for r in rows if r.CP < 0]
+    s["diag"] = {"contracts_oi": len(oi), "snapshots": len(snaps), "rows": len(rows),
+                 "call_rows": len(cs), "put_rows": len(ps),
+                 "call_oi": round(sum(r.OI for r in cs)), "put_oi": round(sum(r.OI for r in ps)),
+                 "call_gamma0": sum(1 for r in cs if r.G <= 0), "put_gamma0": sum(1 for r in ps if r.G <= 0),
+                 "snap_sample": (list(ssample[1].keys()) if ssample else [])}
     if not rows:
         s["error"] = (f"Alpaca: {len(oi)} contracts with OI, {len(snaps)} snapshots, 0 joined; "
                       f"contract fields {sorted(sample) if sample else '-'}; snapshot {ssample[0] if ssample else '-'} "
@@ -557,7 +564,7 @@ def main():
             stale = True
         print(f"{src}:{und:4} spot={s['spot']:.2f} levels={len(s['levels'])} {s['error'] or 'ok'}")
         inst.append({"keys": keys, "source": s["source"], "spot": s["spot"], "levels": len(s["levels"]), "error": s["error"],
-                     "stale": stale})
+                     "stale": stale, "diag": s.get("diag", {})})
         events.append({"eventType": "GexRun", "instrument": und, "source": src, "ok": 1 if ok else 0,
                        "status": "ok" if ok else "error", "error": s["error"][:250],
                        "levels": len(s["levels"]), "spot": s["spot"], "durationSec": round(time.time() - t1, 2)})
