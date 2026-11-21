@@ -263,6 +263,9 @@ def load_alpaca(und, days, band, s):
             fl["call_vol_7d" if cp > 0 else "put_vol_7d"] += vol
             fl["delta_flow_7d"] += vol * delta * 100
     s["flow"] = {k: round(x) for k, x in fl.items()}
+    s["oi"] = {"call_oi": round(sum(r.OI for r in rows if r.CP > 0)), "put_oi": round(sum(r.OI for r in rows if r.CP < 0)),
+               "call_oi_7d": round(sum(r.OI for r in rows if r.CP > 0 and r.D <= 7)),
+               "put_oi_7d": round(sum(r.OI for r in rows if r.CP < 0 and r.D <= 7))}
     cs = [r for r in rows if r.CP > 0]
     ps = [r for r in rows if r.CP < 0]
     s["diag"] = {"contracts_oi": len(oi), "snapshots": len(snaps), "rows": len(rows),
@@ -547,7 +550,10 @@ def send_new_relic(events):
 FLOW_COLS = ["call_vol", "put_vol", "call_prem", "put_prem", "delta_flow", "call_vol_7d", "put_vol_7d", "delta_flow_7d", "contracts"]
 
 
-def write_flow_log(inst, prev_path, out="site", keep=20000):
+OI_COLS = ["call_oi", "put_oi", "call_oi_7d", "put_oi_7d"]
+
+
+def write_flow_log(inst, prev_path, out="site", keep=20000, key="flow", cols=None, fname="flow_log.csv"):
     """Append one row per instrument to flow_log.csv (previous file is fetched from the data branch).
     A row identical to the previous one of the same instrument (weekend, closed market) is not added."""
     rows = []
@@ -556,7 +562,8 @@ def write_flow_log(inst, prev_path, out="site", keep=20000):
             rows = [x.rstrip("\n") for x in f if x.strip()]
     except OSError:
         pass
-    head = "utc,instrument," + "spot," + ",".join(FLOW_COLS)
+    cols = cols or FLOW_COLS
+    head = "utc,instrument," + "spot," + ",".join(cols)
     if not rows or not rows[0].startswith("utc,"):
         rows = [head] + [x for x in rows if not x.startswith("utc,")]
     last = {}
@@ -566,17 +573,17 @@ def write_flow_log(inst, prev_path, out="site", keep=20000):
             last[c[1]] = ",".join(c[2:])
     now = dt.datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
     for i in inst:
-        f = i.get("flow") or {}
+        f = i.get(key) or {}
         if not f or not i["spot"]:
             continue
         name = i["source"].split(":")[-1]
-        tail = ",".join([f"{i['spot']:.2f}"] + [str(f[c]) for c in FLOW_COLS])
+        tail = ",".join([f"{i['spot']:.2f}"] + [str(f[c]) for c in cols])
         if last.get(name) == tail:
             continue
         rows.append(f"{now},{name},{tail}")
     rows = rows[:1] + rows[1:][-keep:]
     os.makedirs(out, exist_ok=True)
-    with open(os.path.join(out, "flow_log.csv"), "w") as f:
+    with open(os.path.join(out, fname), "w") as f:
         f.write("\n".join(rows) + "\n")
 
 
@@ -649,7 +656,7 @@ def main():
             stale = True
         print(f"{src}:{und:4} spot={s['spot']:.2f} levels={len(s['levels'])} {s['error'] or 'ok'}")
         inst.append({"keys": keys, "source": s["source"], "spot": s["spot"], "levels": len(s["levels"]), "error": s["error"],
-                     "stale": stale, "diag": s.get("diag", {}), "flow": s.get("flow", {})})
+                     "stale": stale, "diag": s.get("diag", {}), "flow": s.get("flow", {}), "oi": s.get("oi", {})})
         if s.get("flow"):
             f = s["flow"]
             events.append({"eventType": "GexFlow", "instrument": und, "spot": s["spot"], "pcVol": round(f["put_vol"] / max(f["call_vol"], 1), 3),
@@ -663,6 +670,7 @@ def main():
               "instruments": inst}
     write_site(lines, status)
     write_flow_log(inst, os.environ.get("PREV_FLOW", ""))
+    write_flow_log(inst, os.environ.get("PREV_OI", ""), key="oi", cols=OI_COLS, fname="oi_log.csv")
     run = os.environ.get("GITHUB_RUN_ID", "")
     events.append({"eventType": "GexJob", "ok": 1 if lines else 0, "instrumentsOk": sum(1 for i in inst if not i["error"]),
                    "instrumentsTotal": len(INSTRUMENTS), "durationSec": status["duration_sec"],
