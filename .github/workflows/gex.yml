@@ -57,6 +57,7 @@ jobs:
           TOKEN: ${{ github.token }}
         run: |
           norm() { sed -E 's/\|@=[^|]*//' "$1"; }      # ignore spot / time, they only rescale the same levels
+          curl -sf "https://raw.githubusercontent.com/$REPO/data/levels.txt" -o /tmp/prev.txt || : > /tmp/prev.txt
           if [ "$(norm /tmp/prev.txt)" = "$(norm site/levels.txt)" ]; then
             echo "levels unchanged - nothing to publish"
             exit 0
