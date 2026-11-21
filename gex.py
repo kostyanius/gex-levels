@@ -498,7 +498,7 @@ def write_site(lines, status, out="site"):
     rows = "".join(
         f"<tr><td>{html.escape(i['keys'].split(',')[0])}</td><td>{html.escape(i['source'])}</td>"
         f"<td>{fmt(i['spot']) if i['spot'] else '-'}</td><td>{i['levels']}</td>"
-        f"<td class='{'err' if i['error'] else 'ok'}'>{html.escape(i['error'] or 'ok')}</td></tr>"
+        f"<td class='{'err' if i['error'] else 'ok'}'>{html.escape(('STALE (last good levels kept) ' if i.get('stale') else '') + (i['error'] or 'ok'))}</td></tr>"
         for i in status["instruments"])
     page = f"""<!doctype html><html lang="uk"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>GEX levels</title>
@@ -526,9 +526,22 @@ const x=getSelection();x.removeAllRanges();x.addRange(r);document.execCommand('c
         f.write(page)
 
 
+def read_prev(path):
+    """Previous published levels.txt: {keys: line}. Used to keep the last good line of an instrument whose source failed."""
+    out = {}
+    try:
+        for ln in open(path, encoding="utf-8").read().splitlines():
+            if "|" in ln:
+                out[ln.split("|", 1)[0]] = ln
+    except OSError:
+        pass
+    return out
+
+
 def main():
     t0 = time.time()
     lines, inst, events = [], [], []
+    prev_lines = read_prev(os.environ.get("PREV_LEVELS", ""))
     for keys, src, und, days, band, today in INSTRUMENTS:
         t1 = time.time()
         try:
@@ -536,10 +549,15 @@ def main():
         except Exception as e:
             s = {"source": f"{src}:{und}", "spot": 0.0, "levels": [], "error": f"{type(e).__name__}: {e}"}
         ok = not s["error"]
+        stale = False
         if ok:
             lines.append(line_for(keys, s))
+        elif keys in prev_lines:                    # source failed: keep the last good line instead of dropping the instrument
+            lines.append(prev_lines[keys])
+            stale = True
         print(f"{src}:{und:4} spot={s['spot']:.2f} levels={len(s['levels'])} {s['error'] or 'ok'}")
-        inst.append({"keys": keys, "source": s["source"], "spot": s["spot"], "levels": len(s["levels"]), "error": s["error"]})
+        inst.append({"keys": keys, "source": s["source"], "spot": s["spot"], "levels": len(s["levels"]), "error": s["error"],
+                     "stale": stale})
         events.append({"eventType": "GexRun", "instrument": und, "source": src, "ok": 1 if ok else 0,
                        "status": "ok" if ok else "error", "error": s["error"][:250],
                        "levels": len(s["levels"]), "spot": s["spot"], "durationSec": round(time.time() - t1, 2)})
@@ -547,7 +565,7 @@ def main():
               "instruments": inst}
     write_site(lines, status)
     run = os.environ.get("GITHUB_RUN_ID", "")
-    events.append({"eventType": "GexJob", "ok": 1 if lines else 0, "instrumentsOk": len(lines),
+    events.append({"eventType": "GexJob", "ok": 1 if lines else 0, "instrumentsOk": sum(1 for i in inst if not i["error"]),
                    "instrumentsTotal": len(INSTRUMENTS), "durationSec": status["duration_sec"],
                    "trigger": os.environ.get("GITHUB_EVENT_NAME", "local"), "runId": run,
                    "runUrl": f"https://github.com/{os.environ.get('GITHUB_REPOSITORY', '')}/actions/runs/{run}" if run else ""})

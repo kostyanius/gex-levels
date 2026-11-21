@@ -31,9 +31,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Fetch previously published levels
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          curl -sf "https://raw.githubusercontent.com/$REPO/data/levels.txt" -o /tmp/prev.txt || true
+          touch /tmp/prev.txt
+
       - name: Calculate GEX levels
         run: python gex.py
         env:
+          PREV_LEVELS: /tmp/prev.txt
           # optional New Relic events "GexRun" / "GexJob" (Settings -> Secrets and variables -> Actions)
           NR_LICENSE_KEY: ${{ secrets.NR_LICENSE_KEY }}
           NR_REGION: ${{ vars.NR_REGION }}
@@ -49,7 +57,6 @@ jobs:
           TOKEN: ${{ github.token }}
         run: |
           norm() { sed -E 's/\|@=[^|]*//' "$1"; }      # ignore spot / time, they only rescale the same levels
-          curl -sf "https://raw.githubusercontent.com/$REPO/data/levels.txt" -o /tmp/prev.txt || : > /tmp/prev.txt
           if [ "$(norm /tmp/prev.txt)" = "$(norm site/levels.txt)" ]; then
             echo "levels unchanged - nothing to publish"
             exit 0
