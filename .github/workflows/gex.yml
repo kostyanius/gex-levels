@@ -57,9 +57,10 @@ jobs:
           TOKEN: ${{ github.token }}
         run: |
           norm() { sed -E 's/\|@=[^|]*//' "$1"; }      # ignore spot / time, they only rescale the same levels
-          curl -sf "https://raw.githubusercontent.com/$REPO/data/levels.txt" -o /tmp/prev.txt || : > /tmp/prev.txt
-          if [ "$(norm /tmp/prev.txt)" = "$(norm site/levels.txt)" ]; then
-            echo "levels unchanged - nothing to publish"
+          nstat() { grep -v '"updated_utc"\|"duration_sec"' "$1"; }   # status without the run time
+          curl -sf "https://raw.githubusercontent.com/$REPO/data/status.json" -o /tmp/prev_status.json || : > /tmp/prev_status.json
+          if [ "$(norm /tmp/prev.txt)" = "$(norm site/levels.txt)" ] && [ "$(nstat /tmp/prev_status.json)" = "$(nstat site/status.json)" ]; then
+            echo "levels and status unchanged - nothing to publish"
             exit 0
           fi
           rm -f site/index.html                          # not needed here: the file is read as plain text
