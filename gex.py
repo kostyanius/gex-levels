@@ -406,6 +406,17 @@ def compute(s, rows, days, band, today, mult, yr, base_close, iv30):
         lv(f"Put Wall 2 ({100 * dn[1][1] / dn[0][1]:.0f}%)", dn[1][0])
     if flip > 0:
         lv("Gamma Flip", flip)
+    else:
+        # no zero crossing near the price (put-heavy chain): "Gamma Mid" = the strike where the cumulative net GEX
+        # (from the lowest strike up) reaches half of the total, i.e. the middle of the gamma mass
+        tot = sum(pf.values())
+        if len(pf) >= 3 and tot != 0:
+            cum = 0.0
+            for k in sorted(pf):
+                cum += pf[k]
+                if cum / tot >= 0.5:
+                    lv("Gamma Mid", k)
+                    break
     if mp_win > 0:
         lv("Max Pain", mp_win)
     if SHOW_NEAR and first_d <= days:
