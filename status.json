@@ -1,0 +1,54 @@
+{
+ "updated_utc": "2026-11-21 12:26",
+ "duration_sec": 0.4,
+ "instruments": [
+  {
+   "keys": "US30,DJ30,DJI,WS30,YM1,MYM",
+   "source": "ALPACA:DIA",
+   "spot": 0.0,
+   "levels": 0,
+   "error": "HTTPError: HTTP Error 401: Unauthorized",
+   "stale": false
+  },
+  {
+   "keys": "US100,NAS100,USTEC,NDX,NQ1,MNQ",
+   "source": "ALPACA:QQQ",
+   "spot": 0.0,
+   "levels": 0,
+   "error": "HTTPError: HTTP Error 401: Unauthorized",
+   "stale": false
+  },
+  {
+   "keys": "US500,SPX500,SP500,SPX,ES1,MES",
+   "source": "ALPACA:SPY",
+   "spot": 0.0,
+   "levels": 0,
+   "error": "HTTPError: HTTP Error 401: Unauthorized",
+   "stale": false
+  },
+  {
+   "keys": "XAUUSD,GOLD,GC1,MGC",
+   "source": "ALPACA:GLD",
+   "spot": 0.0,
+   "levels": 0,
+   "error": "HTTPError: HTTP Error 401: Unauthorized",
+   "stale": false
+  },
+  {
+   "keys": "ETH",
+   "source": "DERIBIT:ETH",
+   "spot": 1659.05,
+   "levels": 17,
+   "error": "",
+   "stale": false
+  },
+  {
+   "keys": "BTC",
+   "source": "DERIBIT:BTC",
+   "spot": 58482.0,
+   "levels": 16,
+   "error": "",
+   "stale": false
+  }
+ ]
+}
