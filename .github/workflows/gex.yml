@@ -8,6 +8,7 @@ on:
     - cron: "40 6 * * 1-5"     # before the European open (CBOE open interest is already updated)
     - cron: "15 13 * * 1-5"    # before the US open (pre-market prices of the ETFs)
     - cron: "45 15 * * 1-5"    # after the US open
+    - cron: "5 14-21 * * 1-5"  # hourly during the US session: the intraday option flow log (flow_log.csv)
     - cron: "10 10 * * 0,6"    # weekends: only ETH / BTC move
   workflow_dispatch: {}        # "Run workflow" button for an update on demand
 
@@ -37,11 +38,14 @@ jobs:
         run: |
           curl -sf "https://raw.githubusercontent.com/$REPO/data/levels.txt" -o /tmp/prev.txt || true
           touch /tmp/prev.txt
+          curl -sf "https://raw.githubusercontent.com/$REPO/data/flow_log.csv" -o /tmp/prev_flow.csv || true
+          touch /tmp/prev_flow.csv
 
       - name: Calculate GEX levels
         run: python gex.py
         env:
           PREV_LEVELS: /tmp/prev.txt
+          PREV_FLOW: /tmp/prev_flow.csv
           # optional New Relic events "GexRun" / "GexJob" (Settings -> Secrets and variables -> Actions)
           NR_LICENSE_KEY: ${{ secrets.NR_LICENSE_KEY }}
           NR_REGION: ${{ vars.NR_REGION }}
@@ -59,7 +63,7 @@ jobs:
           norm() { sed -E 's/\|@=[^|]*//' "$1"; }      # ignore spot / time, they only rescale the same levels
           nstat() { grep -v '"updated_utc"\|"duration_sec"' "$1"; }   # status without the run time
           curl -sf "https://raw.githubusercontent.com/$REPO/data/status.json" -o /tmp/prev_status.json || : > /tmp/prev_status.json
-          if [ "$(norm /tmp/prev.txt)" = "$(norm site/levels.txt)" ] && [ "$(nstat /tmp/prev_status.json)" = "$(nstat site/status.json)" ]; then
+          if [ "$(norm /tmp/prev.txt)" = "$(norm site/levels.txt)" ] && [ "$(nstat /tmp/prev_status.json)" = "$(nstat site/status.json)" ] && cmp -s /tmp/prev_flow.csv site/flow_log.csv; then
             echo "levels and status unchanged - nothing to publish"
             exit 0
           fi
@@ -68,7 +72,7 @@ jobs:
           git init -q -b data
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add levels.txt status.json
+          git add levels.txt status.json flow_log.csv
           git commit -q -m "GEX levels $(date -u +%Y-%m-%d\ %H:%M) UTC"
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" data
           echo "published: https://raw.githubusercontent.com/$REPO/data/levels.txt"

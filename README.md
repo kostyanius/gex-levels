@@ -28,3 +28,9 @@ cannot block new ones. Why not Pages: the old 5-minute run created ~290 deployme
 New Relic (optional): secret `NR_LICENSE_KEY` (Ingest - License key), variable `NR_REGION` = `EU` or `US`.
 Each run sends one `GexRun` event per instrument (ok, status, error, levels, spot, durationSec) and one `GexJob`
 event (ok, instrumentsOk, instrumentsTotal, durationSec, trigger, runUrl). Dashboard: `newrelic/dashboard.json`.
+
+## Option flow log (experiment)
+
+Every run also records the day's option volume of the ETFs (put / call volume, premium, delta-weighted volume, and the same for expiries within 7 days) from the Alpaca snapshots.
+It goes to `flow_log.csv` on the `data` branch (one row per instrument per run, identical rows are skipped) and to New Relic as the `GexFlow` event.
+The direction of the trades is not known, so this is only a sentiment estimate. The log is meant to be compared with the real daily direction after a few weeks.
