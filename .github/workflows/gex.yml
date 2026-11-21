@@ -31,12 +31,23 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Fetch previously published levels
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          curl -sf "https://raw.githubusercontent.com/$REPO/data/levels.txt" -o /tmp/prev.txt || true
+          touch /tmp/prev.txt
+
       - name: Calculate GEX levels
         run: python gex.py
         env:
+          PREV_LEVELS: /tmp/prev.txt
           # optional New Relic events "GexRun" / "GexJob" (Settings -> Secrets and variables -> Actions)
           NR_LICENSE_KEY: ${{ secrets.NR_LICENSE_KEY }}
           NR_REGION: ${{ vars.NR_REGION }}
+          # Alpaca (free account): Settings -> Secrets and variables -> Actions -> New repository secret
+          ALPACA_KEY_ID: ${{ secrets.ALPACA_KEY_ID }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
 
       # The result lives on the "data" branch as a single commit that is replaced on every update,
       # so the repository history and the number of deployments do not grow. No GitHub Pages involved.
