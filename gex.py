@@ -31,10 +31,10 @@ UTC = dt.timezone.utc
 
 # keys (matched against the TradingView ticker, comma separated), source, underlying, days window, band, include today's expiry
 INSTRUMENTS = [
-    ("US30,DJ30,DJI,WS30,YM1,MYM", "ALPACA", "DIA", 45, 0.06, False),
-    ("US100,NAS100,USTEC,NDX,NQ1,MNQ", "ALPACA", "QQQ", 45, 0.06, False),
-    ("US500,SPX500,SP500,SPX,ES1,MES", "ALPACA", "SPY", 45, 0.06, False),
-    ("XAUUSD,GOLD,GC1,MGC", "ALPACA", "GLD", 45, 0.06, False),
+    ("US30,DJ30,DJI,WS30,YM1,MYM", "ALPACA", "DIA", 45, 0.08, False),
+    ("US100,NAS100,USTEC,NDX,NQ1,MNQ", "ALPACA", "QQQ", 45, 0.08, False),
+    ("US500,SPX500,SP500,SPX,ES1,MES", "ALPACA", "SPY", 45, 0.08, False),
+    ("XAUUSD,GOLD,GC1,MGC", "ALPACA", "GLD", 45, 0.08, False),
     ("ETH", "DERIBIT", "ETH", 45, 0.12, False),
     ("BTC", "DERIBIT", "BTC", 45, 0.12, False),
 ]
