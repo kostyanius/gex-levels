@@ -1,0 +1,212 @@
+{
+ "updated_utc": "2026-11-28 17:00",
+ "duration_sec": 2.7,
+ "instruments": [
+  {
+   "keys": "US30,DJ30,DJI,WS30,YM1,MYM",
+   "source": "ALPACA:DIA",
+   "spot": 507.46,
+   "levels": 15,
+   "error": "",
+   "stale": false,
+   "diag": {
+    "contracts_oi": 1018,
+    "snapshots": 1018,
+    "rows": 718,
+    "call_rows": 412,
+    "put_rows": 306,
+    "call_oi": 70082,
+    "put_oi": 73224,
+    "iv_filled": 23,
+    "call_gamma0": 23,
+    "put_gamma0": 0,
+    "snap_sample": [
+     "dailyBar",
+     "greeks",
+     "impliedVolatility",
+     "latestQuote",
+     "latestTrade",
+     "minuteBar",
+     "prevDailyBar"
+    ]
+   },
+   "flow": {
+    "call_vol": 8663,
+    "put_vol": 7254,
+    "call_prem": 6747602,
+    "put_prem": 6296248,
+    "delta_flow": 165030,
+    "call_vol_7d": 2767,
+    "put_vol_7d": 3348,
+    "delta_flow_7d": 3179,
+    "contracts": 821
+   },
+   "oi": {
+    "call_oi": 70082,
+    "put_oi": 73224,
+    "call_oi_7d": 21434,
+    "put_oi_7d": 13158
+   }
+  },
+  {
+   "keys": "US100,NAS100,USTEC,NDX,NQ1,MNQ",
+   "source": "ALPACA:QQQ",
+   "spot": 650.805,
+   "levels": 16,
+   "error": "",
+   "stale": false,
+   "diag": {
+    "contracts_oi": 2892,
+    "snapshots": 2840,
+    "rows": 2154,
+    "call_rows": 1176,
+    "put_rows": 978,
+    "call_oi": 1617935,
+    "put_oi": 1880403,
+    "iv_filled": 32,
+    "call_gamma0": 28,
+    "put_gamma0": 4,
+    "snap_sample": [
+     "dailyBar",
+     "greeks",
+     "impliedVolatility",
+     "latestQuote",
+     "latestTrade",
+     "minuteBar",
+     "prevDailyBar"
+    ]
+   },
+   "flow": {
+    "call_vol": 636360,
+    "put_vol": 782135,
+    "call_prem": 375468148,
+    "put_prem": 484977287,
+    "delta_flow": 6894949,
+    "call_vol_7d": 465670,
+    "put_vol_7d": 664586,
+    "delta_flow_7d": 5132282,
+    "contracts": 2578
+   },
+   "oi": {
+    "call_oi": 1617935,
+    "put_oi": 1880403,
+    "call_oi_7d": 489403,
+    "put_oi_7d": 509375
+   }
+  },
+  {
+   "keys": "US500,SPX500,SP500,SPX,ES1,MES",
+   "source": "ALPACA:SPY",
+   "spot": 728.35,
+   "levels": 17,
+   "error": "",
+   "stale": false,
+   "diag": {
+    "contracts_oi": 3070,
+    "snapshots": 3014,
+    "rows": 2272,
+    "call_rows": 1302,
+    "put_rows": 970,
+    "call_oi": 1987092,
+    "put_oi": 2447142,
+    "iv_filled": 167,
+    "call_gamma0": 165,
+    "put_gamma0": 2,
+    "snap_sample": [
+     "dailyBar",
+     "greeks",
+     "impliedVolatility",
+     "latestQuote",
+     "latestTrade",
+     "minuteBar",
+     "prevDailyBar"
+    ]
+   },
+   "flow": {
+    "call_vol": 972576,
+    "put_vol": 794106,
+    "call_prem": 459400060,
+    "put_prem": 396596255,
+    "delta_flow": 15672817,
+    "call_vol_7d": 705229,
+    "put_vol_7d": 595071,
+    "delta_flow_7d": 12338638,
+    "contracts": 2708
+   },
+   "oi": {
+    "call_oi": 1987092,
+    "put_oi": 2447142,
+    "call_oi_7d": 715386,
+    "put_oi_7d": 816763
+   }
+  },
+  {
+   "keys": "XAUUSD,GOLD,GC1,MGC",
+   "source": "ALPACA:GLD",
+   "spot": 333.85,
+   "levels": 16,
+   "error": "",
+   "stale": false,
+   "diag": {
+    "contracts_oi": 1666,
+    "snapshots": 1640,
+    "rows": 1120,
+    "call_rows": 611,
+    "put_rows": 509,
+    "call_oi": 145132,
+    "put_oi": 156166,
+    "iv_filled": 19,
+    "call_gamma0": 19,
+    "put_gamma0": 0,
+    "snap_sample": [
+     "dailyBar",
+     "greeks",
+     "impliedVolatility",
+     "latestQuote",
+     "latestTrade",
+     "minuteBar",
+     "prevDailyBar"
+    ]
+   },
+   "flow": {
+    "call_vol": 64638,
+    "put_vol": 64355,
+    "call_prem": 25681783,
+    "put_prem": 22823267,
+    "delta_flow": 996196,
+    "call_vol_7d": 43212,
+    "put_vol_7d": 47173,
+    "delta_flow_7d": 707245,
+    "contracts": 1329
+   },
+   "oi": {
+    "call_oi": 145132,
+    "put_oi": 156166,
+    "call_oi_7d": 70388,
+    "put_oi_7d": 33102
+   }
+  },
+  {
+   "keys": "ETH",
+   "source": "DERIBIT:ETH",
+   "spot": 1653.79,
+   "levels": 17,
+   "error": "",
+   "stale": false,
+   "diag": {},
+   "flow": {},
+   "oi": {}
+  },
+  {
+   "keys": "BTC",
+   "source": "DERIBIT:BTC",
+   "spot": 59569.55,
+   "levels": 17,
+   "error": "",
+   "stale": false,
+   "diag": {},
+   "flow": {},
+   "oi": {}
+  }
+ ]
+}
